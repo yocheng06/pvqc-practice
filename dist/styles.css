@@ -151,6 +151,10 @@ textarea{resize:vertical;line-height:1.8;font-family:ui-monospace,'Noto Sans TC'
 .vocab-search-list li strong{font-weight:600;overflow-wrap:anywhere}
 .vocab-search-list li div span,.vocab-search-list small{color:var(--muted);font-size:14px;line-height:1.5}
 .vocab-search-list small{text-align:right}
+.exam-setup{margin-top:20px}.exam-setup>.primary{margin:4px 0 8px}
+.exam-card{max-width:100%;text-align:left}.exam-stem{font-size:19px;line-height:1.8;margin:20px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.exam-options{grid-template-columns:1fr}.exam-option{align-items:flex-start;text-align:left;line-height:1.65}.exam-option>span:last-child{flex:1;min-width:0}
+.exam-errors li{overflow-wrap:anywhere}.exam-error-stem{font-weight:500;line-height:1.65;margin:8px 0}
 .quiz-result{margin-top:28px}.quiz-errors{text-align:left;margin-top:30px;border-top:1px solid var(--border);padding-top:10px}.quiz-errors h3{font-size:19px}.quiz-errors ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:12px}.quiz-errors li{background:#fff5ef;border-radius:8px;padding:16px;overflow-wrap:anywhere}.quiz-errors li p{margin:0 0 6px;font-size:14px}.quiz-errors li strong{color:#71392a;font-size:18px}.quiz-errors .quiz-your-answer{margin:8px 0 0;color:#8d493d}
 @media(max-width:1250px){
  .workspace{padding:34px 32px 26px}.topbar{margin:0 22px}.sidebar{width:220px}.brand{font-size:36px}.nav-item{padding-inline:20px;gap:16px;font-size:16px}.domain-label{font-size:12px;letter-spacing:0}.domain-label span{font-size:12px;margin-left:5px}
@@ -160,7 +164,7 @@ textarea{resize:vertical;line-height:1.8;font-family:ui-monospace,'Noto Sans TC'
  .gate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gate-card{min-height:215px}.bank-banner{padding:20px}.audio-option{flex-direction:column;align-items:stretch}.audio-option .speak{justify-content:flex-start}.title-row p:not(.eyebrow){font-size:16px}
 }
 @media(max-width:720px){
- .quiz-vocabulary ol,.quiz-errors ul{grid-template-columns:1fr}.quiz-count strong{font-size:28px}.quiz-setup select{font-size:14px}.quiz-result .card-actions>*{width:100%}.exam-banner .primary{width:100%;min-width:0}.vocab-search-list li{grid-template-columns:32px minmax(0,1fr);gap:6px 10px}.vocab-search-list small{grid-column:2;text-align:left}
+ .quiz-vocabulary ol,.quiz-errors ul{grid-template-columns:1fr}.quiz-count strong{font-size:28px}.quiz-setup select{font-size:14px}.quiz-result .card-actions>*{width:100%}.exam-banner .primary{width:100%;min-width:0}.vocab-search-list li{grid-template-columns:32px minmax(0,1fr);gap:6px 10px}.vocab-search-list small{grid-column:2;text-align:left}.exam-stem{font-size:16px}.exam-options .option{font-size:15px}
  body{display:block}.sidebar{width:100%;min-height:0;padding:17px 16px 0;border-right:0;border-bottom:1px solid var(--border)}.brand{font-size:30px;margin:0 5px}.brand-sub{display:inline;font-size:15px;letter-spacing:2px;margin-left:13px}.domain-label{display:none}nav{display:grid;grid-template-columns:1fr 1fr;gap:5px 8px;margin-top:20px;padding-bottom:12px}.nav-item{font-size:14px;justify-content:flex-start;padding:13px 16px;flex:1;min-height:50px;border-radius:8px;gap:8px}.nav-icon{width:20px;height:20px}.nav-count{padding:0 4px;font-size:12px;margin-left:0}
  .topbar{margin:0 20px;padding:16px 0;min-height:56px;font-size:13px}.workspace{padding:27px 20px}.eyebrow{font-size:12px;letter-spacing:1.5px}h1{font-size:30px}.title-row{gap:12px}.title-row p:not(.eyebrow){font-size:14px}.bank-number{padding-top:0}.bank-number strong{font-size:35px}.bank-number span{font-size:12px}
  .bank-banner{padding:18px;align-items:flex-start;flex-direction:column;gap:14px;margin-top:23px;min-height:0}.bank-banner strong{font-size:17px}.bank-banner p{font-size:14px}.bank-banner .secondary{min-width:0;padding:10px 17px;min-height:44px;font-size:14px}
