@@ -174,8 +174,7 @@ window.PVQC_IN_CLASS_EXAM = [
     "sourceMarkedAnswer": "B",
     "explanation": {
       "clue": "句首 Forming... 是分詞片語，空格要接主句主詞；後面有 is called。",
-      "reason": "選 B the core 才能形成主詞 the core + 謂語 is called。",
-      "sourceNote": "句首 Forming... 的語意修飾對象不清；實際形成圖形的是線圈。按題目答案仍選 B。"
+      "reason": "選 B the core，接成主詞 the core + 謂語 is called；句首 Forming... 的分詞片語依本題句意描述核心構造。"
     }
   },
   {
