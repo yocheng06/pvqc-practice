@@ -16,7 +16,7 @@ const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const normalized=s=>s.trim().normalize('NFC').toLowerCase();
 const wordKey=w=>JSON.stringify([w.english,w.chinese]);
 let bank=[],mistakes=[],source='',view='home',session=null,audioGeneration=0;
-let persistWarning=false,timer=null,noticeTimer=null,quizGroup=0;
+let persistWarning=false,timer=null,noticeTimer=null,quizGroup=0,examQuestionCount=IN_CLASS_EXAM.length;
 const audioSupported='speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 try { const saved=JSON.parse(localStorage.getItem(KEY)||'null'); if(saved){bank=validateBank(saved.bank);source=String(saved.source||'課程題庫');mistakes=Array.isArray(saved.mistakes)?saved.mistakes.filter(m=>bank.some(w=>wordKey(w)===m.key)&&GATES.some(g=>g.id===m.gate)):[];} } catch {bank=[];mistakes=[];source='';}
 if(!bank.length&&COURSE){bank=validateBank(COURSE.words);source=COURSE.name;}
@@ -74,12 +74,20 @@ function quizGroups(){
 function renderExamSetup(){
  if(!IN_CLASS_EXAM.length){$('activity').innerHTML='<div class="empty"><h2>題目資料尚未載入</h2><p>重新整理頁面後再試一次。</p></div>';return;}
  const differences=IN_CLASS_EXAM.filter(q=>q.answer!==q.sourceMarkedAnswer).map(q=>q.number);
- $('activity').innerHTML=`<div class='bank-banner loaded'><div><strong>題中考題 · ${IN_CLASS_EXAM.length} 題</strong><p>四選一練習，題目順序隨機；每題作答後立即核對答案。</p></div><span class='quiz-count'><strong>${IN_CLASS_EXAM.length}</strong> 題</span></div><div class='bank-editor exam-setup'><h2>開始刷題</h2><p>完成後會顯示答對率和錯題清單，也能只重練答錯的題目。</p>${differences.length?`<p class='storage-note'>題目原稿括號標記與你提供的答案表不同：第 ${differences.join('、')} 題。練習判分依你提供的答案表。</p>`:''}<button class='primary' data-action='start-exam'>開始練習 ${IN_CLASS_EXAM.length} 題</button></div>`;
+ $('activity').innerHTML=`<div class='bank-banner loaded'><div><strong>題中考題 · ${IN_CLASS_EXAM.length} 題</strong><p>從題庫隨機抽出指定題數；每題作答後立即核對答案。</p></div><span class='quiz-count'><strong>${IN_CLASS_EXAM.length}</strong> 題</span></div><div class='bank-editor exam-setup'><h2>開始刷題</h2><p>完成後會顯示答對率和錯題清單，也能只重練答錯的題目。</p>${differences.length?`<p class='storage-note'>題目原稿括號標記與你提供的答案表不同：第 ${differences.join('、')} 題。練習判分依你提供的答案表。</p>`:''}<label class='input-label' for='exam-question-count'>每次練習題數（1–${IN_CLASS_EXAM.length}）</label><input class='text-input exam-count-input' id='exam-question-count' type='number' min='1' max='${IN_CLASS_EXAM.length}' step='1' value='${examQuestionCount}' inputmode='numeric'><p class='storage-note'>輸入每次想練習的題數；重練錯題時會只出現本次答錯的題目。</p><button class='primary' id='start-exam-button' data-action='start-exam'>開始練習 ${examQuestionCount} 題</button></div>`;
 }
 function startExam(onlyWrong=false){
- const wrongQuestions=onlyWrong&&session?.exam&&session.finished?session.answers.filter(a=>!a.correct).map(a=>a.question):[];
- const questions=onlyWrong?wrongQuestions:IN_CLASS_EXAM;if(!questions.length)throw new Error('目前沒有錯題可以重練。');
- beginSession({gate:1,exam:true,review:onlyWrong,continuous:false,limit:questions.length,questions:shuffle(questions)});
+ const previous=session?.exam&&session.finished?session:null;
+ let questions=[];
+ if(onlyWrong){questions=previous?previous.answers.filter(a=>!a.correct).map(a=>a.question):[];}
+ else if(previous){questions=previous.questions;}
+ else{
+  const count=Number($('exam-question-count')?.value??examQuestionCount);
+  if(!Number.isInteger(count)||count<1||count>IN_CLASS_EXAM.length)throw new Error(`題數請輸入 1 到 ${IN_CLASS_EXAM.length} 的整數。`);
+  examQuestionCount=count;questions=shuffle(IN_CLASS_EXAM).slice(0,count);
+ }
+ if(!questions.length)throw new Error(onlyWrong?'目前沒有錯題可以重練。':'目前沒有題目可以練習。');
+ beginSession({gate:1,exam:true,examCount:questions.length,review:onlyWrong,continuous:false,limit:questions.length,questions:shuffle(questions)});
 }
 function renderExamQuestion(){
  const s=session,q=s.questions[s.index],labels='ABCD';s.answered=false;
@@ -175,7 +183,7 @@ function answer(value){
 }
 function next(){if(!session||!session.answered||session.finished)return;if(session.exam){if(session.index+1<session.questions.length){session.index++;renderExamQuestion();}else finish();return;}stopAudio();if(session.index+1<session.questions.length){session.index++;renderQuestion();}else finish();}
 function finish(){
- clearInterval(timer);session.finished=true;const s=session,correct=s.answers.filter(a=>a.correct).length,total=s.questions.length,percent=Math.round(correct/total*100),summary={gate:s.gate,correct,total,percent};if(s.exam){const wrong=s.answers.filter(a=>!a.correct);$('activity').innerHTML=`<div class='result exam-result'><p class='eyebrow'>題中考題 · ${total} 題</p><h2>${s.review?'錯題重練完成':'練習完成'}</h2><div class='result-score'>${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 答錯 ${wrong.length} 題<br>練習用時 ${duration(Date.now()-s.started)}</p><div class='card-actions'><button class='primary' data-action='retry-exam'>再練全部 ${IN_CLASS_EXAM.length} 題</button>${wrong.length?`<button class='secondary' data-action='retry-exam-wrong'>只練錯題 ${wrong.length} 題</button>`:''}<button class='secondary' data-view='exam'>返回題中考題</button></div>${wrong.length?`<div class='quiz-errors exam-errors'><h3>本次錯題</h3><ul>${wrong.map(a=>{const i='ABCD'.indexOf(a.question.answer);return `<li><p>原題第 ${a.question.number} 題</p><div class='exam-error-stem'>${escape(a.question.stem)}</div><p class='quiz-your-answer'>你的答案：${'ABCD'[a.answer]} · ${escape(a.question.options[a.answer])}</p><p class='quiz-your-answer'>正確答案：${a.question.answer} · ${escape(a.question.options[i])}</p></li>`;}).join('')}</ul></div>`:'<p>本次全部答對，可以再打亂順序練一次。</p>'}</div>`;return;}s.summaries.push(summary);
+ clearInterval(timer);session.finished=true;const s=session,correct=s.answers.filter(a=>a.correct).length,total=s.questions.length,percent=Math.round(correct/total*100),summary={gate:s.gate,correct,total,percent};if(s.exam){const wrong=s.answers.filter(a=>!a.correct);$('activity').innerHTML=`<div class='result exam-result'><p class='eyebrow'>題中考題 · ${total} 題</p><h2>${s.review?'錯題重練完成':'練習完成'}</h2><div class='result-score'>${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 答錯 ${wrong.length} 題<br>練習用時 ${duration(Date.now()-s.started)}</p><div class='card-actions'><button class='primary' data-action='retry-exam'>再練本次 ${s.questions.length} 題</button>${wrong.length?`<button class='secondary' data-action='retry-exam-wrong'>只練錯題 ${wrong.length} 題</button>`:''}<button class='secondary' data-view='exam'>返回題中考題</button></div>${wrong.length?`<div class='quiz-errors exam-errors'><h3>本次錯題</h3><ul>${wrong.map(a=>{const i='ABCD'.indexOf(a.question.answer);return `<li><p>原題第 ${a.question.number} 題</p><div class='exam-error-stem'>${escape(a.question.stem)}</div><p class='quiz-your-answer'>你的答案：${'ABCD'[a.answer]} · ${escape(a.question.options[a.answer])}</p><p class='quiz-your-answer'>正確答案：${a.question.answer} · ${escape(a.question.options[i])}</p></li>`;}).join('')}</ul></div>`:'<p>本次全部答對，可以再打亂順序練一次。</p>'}</div>`;return;}s.summaries.push(summary);
  if(s.quiz){const wrong=s.answers.filter(a=>!a.correct);$('activity').innerHTML=`<div class="result quiz-result"><p class="eyebrow">${escape(s.quiz.label)} · 看中拼英</p><h2>${s.quiz.review?'錯字複習完成':'小考練習完成'}</h2><div class="result-score">${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 答錯 ${wrong.length} 題<br>練習用時 ${duration(Date.now()-s.started)}</p><div class="card-actions"><button class="primary" data-action="retry-quiz">重練本組 ${s.quiz.pool.length} 題</button>${wrong.length?`<button class="secondary" data-action="review-quiz">只練本次 ${wrong.length} 個錯字</button>`:''}<button class="secondary" data-view="quiz">選擇其他組</button></div>${wrong.length?`<div class="quiz-errors"><h3>本次錯字清單</h3><ul>${wrong.map(a=>`<li><p>${escape(a.word.chinese)} <span class="storage-note">· 原序號 ${escape(a.word.id||'未提供')}</span></p><strong>${escape(a.word.english)}</strong><p class="quiz-your-answer">你的答案：${escape(a.answer)}</p></li>`).join('')}</ul></div>`:'<p>本次全部答對，可以前往下一組，或再打亂順序練一次。</p>'}<p class="storage-note">這是練習答對率；實際小考評分依老師規定。</p></div>`;return;}
  $('activity').innerHTML=`<div class="result"><p class="eyebrow">第 ${s.gate} 關 · ${GATES[s.gate-1].name}</p><h2>本關練習完成</h2><div class="result-score">${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 本關用時 ${duration(Date.now()-s.started)}<br>這是練習答對率，並非官方檢定成績。</p>${s.continuous?`<div class="results-list">${s.summaries.map(r=>`<div><span>第 ${r.gate} 關 ${GATES[r.gate-1].name}</span><strong>${r.correct} / ${r.total}</strong></div>`).join('')}</div>`:''}<div class="card-actions">${s.continuous&&s.gate<6?'<button class="primary" data-action="next-gate">前往下一關</button>':'<button class="primary" data-view="home">返回六關練習</button>'}<button class="secondary" data-view="mistakes">查看錯題</button></div></div>`;
 }
@@ -189,6 +197,13 @@ function audioError(message){if($('audio-message'))$('audio-message').textConten
 function playQuestion(){if(!session)return;stopAudio();if($('audio-message'))$('audio-message').textContent='';speak(session.questions[session.index].english);}
 function playOption(i){if(!session||!session.options[i])return;stopAudio();if($('audio-message'))$('audio-message').textContent='';speak(session.options[i].english);}
 function playAll(){if(!session||session.options.length!==4)return;stopAudio();const generation=audioGeneration;let i=0;function play(){if(generation!==audioGeneration||!session||i>=4){document.querySelectorAll('.audio-option').forEach(e=>e.classList.remove('playing'));return;}document.querySelectorAll('.audio-option').forEach(e=>e.classList.remove('playing'));$('audio-option-'+i)?.classList.add('playing');speak(session.options[i].english,()=>{i++;play();});}play();}
+document.addEventListener('input',e=>{
+ if(e.target.id!=='exam-question-count')return;
+ const count=Number(e.target.value),valid=Number.isInteger(count)&&count>=1&&count<=IN_CLASS_EXAM.length;
+ if(valid)examQuestionCount=count;
+ const button=$('start-exam-button');
+ if(button)button.textContent=valid?`開始練習 ${count} 題`:`請輸入 1–${IN_CLASS_EXAM.length} 題`;
+});
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;try{
  if(b.dataset.view){setView(b.dataset.view);return;}if(b.dataset.gate){start(Number(b.dataset.gate));return;}if(b.dataset.review){start(Number(b.dataset.review),false,true);return;}
  if(b.dataset.answer!==undefined){answer(Number(b.dataset.answer));return;}if(b.dataset.play!==undefined){playOption(Number(b.dataset.play));return;}
