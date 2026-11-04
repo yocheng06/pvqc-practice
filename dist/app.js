@@ -16,7 +16,7 @@ const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const normalized=s=>s.trim().normalize('NFC').toLowerCase();
 const wordKey=w=>JSON.stringify([w.english,w.chinese]);
 let bank=[],mistakes=[],reviewItems=[],source='',view='home',session=null,audioGeneration=0;
-let persistWarning=false,timer=null,noticeTimer=null,quizGroup=0,examQuestionCount=IN_CLASS_EXAM.length;
+let persistWarning=false,timer=null,noticeTimer=null,quizGroup=0,quizQuestionCount=0,examQuestionCount=IN_CLASS_EXAM.length;
 const audioSupported='speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 try { const saved=JSON.parse(localStorage.getItem(KEY)||'null'); if(saved){bank=validateBank(saved.bank);source=String(saved.source||'課程題庫');mistakes=Array.isArray(saved.mistakes)?saved.mistakes.filter(m=>bank.some(w=>wordKey(w)===m.key)&&GATES.some(g=>g.id===m.gate)):[];reviewItems=Array.isArray(saved.reviewItems)?[...new Set(saved.reviewItems.filter(key=>typeof key==='string'&&bank.some(w=>wordKey(w)===key)))]:[];} } catch {bank=[];mistakes=[];reviewItems=[];source='';}
 if(!bank.length&&COURSE){bank=validateBank(COURSE.words);source=COURSE.name;}
@@ -110,14 +110,18 @@ function answerExam(value){
 function renderQuiz(){
  const groups=quizGroups();if(!groups.length){$('activity').innerHTML=`<div class='empty'><h2>先加入課程題庫</h2><p>加入詞彙後，會依序分成每組 50 個的小考範圍。</p><button class='primary' data-view='bank'>加入題庫</button></div>`;return;}
  quizGroup=Math.min(quizGroup,groups.length-1);const group=groups[quizGroup];
- const rangeNote=group.isExamRange?`本次完整練習序號 1–150，共 ${group.words.length} 個詞彙，不重複出題。`:group.words.length<50?`最後一組剩下 ${group.words.length} 個詞彙，全部出題，不補入其他組的詞彙。`:'本次會練完整 50 個詞彙，不重複抽題。';
- const startLabel=group.isExamRange?`開始 1–150 練習（${group.words.length} 題）`:`開始本組 ${group.words.length} 題`;
- $('activity').innerHTML=`<div class='bank-banner'><div><strong>${group.isExamRange?'考前複習 · 看中拼英':'兩週小考 · 看中拼英'}</strong><p>${group.isExamRange?'依序號 1–150 練習全部詞彙，組內隨機出題。':'看中文，自己輸入英文。每組依題庫序號接續，組內隨機出題。'}</p></div><span class='quiz-count'><strong>${group.words.length}</strong> 個詞彙</span></div><div class='bank-editor quiz-setup'><h2>選擇這次小考範圍</h2><label class='input-label' for='quiz-group'>小考組別</label><select id='quiz-group'>${groups.map((g,i)=>`<option value='${i}' ${i===quizGroup?'selected':''}>${g.isExamRange?'考前複習':'第 '+g.groupNumber+' 組'} · ${escape(g.label)} · ${g.words.length} 個</option>`).join('')}</select><p>${rangeNote}作答後立即顯示答案；答錯的詞彙也會加入錯題複習。勾選詞彙可加入待複習清單。</p><button class='primary' data-action='start-quiz'>${startLabel}</button><details class='quiz-vocabulary'><summary>先複習本組詞彙（${group.words.length} 個）</summary><ol>${group.words.map((w,i)=>`<li><input type='checkbox' class='review-toggle' data-review-key='${escape(wordKey(w))}' aria-label='將 ${escape(w.english)} 加入待複習清單' ${reviewItems.includes(wordKey(w))?'checked':''}><span class='quiz-word-number'>${escape(w.id||quizGroup*50+i+1)}</span><strong>${escape(w.english)}</strong><span>${escape(w.chinese)}</span></li>`).join('')}</ol><p class='storage-note'>勾選想保留複習的詞彙，之後可到「待複習」集中練習。</p></details><p class='storage-note'>不限時練習，提供字元數提示；判分忽略大小寫與頭尾空白。實際小考時間與評分依老師規定。</p></div>`;
+ quizQuestionCount=Math.min(quizQuestionCount||group.words.length,group.words.length);
+ const rangeNote=`可選 1–${group.words.length} 題，從本組範圍隨機抽出且不重複。`;
+ const startLabel=`開始練習（${quizQuestionCount} 題）`;
+ $('activity').innerHTML=`<div class='bank-banner'><div><strong>${group.isExamRange?'考前複習 · 看中拼英':'兩週小考 · 看中拼英'}</strong><p>${group.isExamRange?'依序號 1–150 練習全部詞彙，組內隨機出題。':'看中文，自己輸入英文。每組依題庫序號接續，組內隨機出題。'}</p></div><span class='quiz-count'><strong>${group.words.length}</strong> 個詞彙</span></div><div class='bank-editor quiz-setup'><h2>選擇這次小考範圍</h2><label class='input-label' for='quiz-group'>小考組別</label><select id='quiz-group'>${groups.map((g,i)=>`<option value='${i}' ${i===quizGroup?'selected':''}>${g.isExamRange?'考前複習':'第 '+g.groupNumber+' 組'} · ${escape(g.label)} · ${g.words.length} 個</option>`).join('')}</select><label class='input-label' for='quiz-question-count'>本次題數（1–${group.words.length}）</label><input id='quiz-question-count' class='text-input quiz-question-count' type='number' min='1' max='${group.words.length}' step='1' inputmode='numeric' value='${quizQuestionCount}' required><p>${rangeNote}作答後立即顯示答案；答錯的詞彙也會加入錯題複習。勾選詞彙可加入待複習清單。</p><button class='primary' data-action='start-quiz'>${startLabel}</button><details class='quiz-vocabulary'><summary>先複習本組詞彙（${group.words.length} 個）</summary><ol>${group.words.map((w,i)=>`<li><input type='checkbox' class='review-toggle' data-review-key='${escape(wordKey(w))}' aria-label='將 ${escape(w.english)} 加入待複習清單' ${reviewItems.includes(wordKey(w))?'checked':''}><span class='quiz-word-number'>${escape(w.id||quizGroup*50+i+1)}</span><strong>${escape(w.english)}</strong><span>${escape(w.chinese)}</span></li>`).join('')}</ol><p class='storage-note'>勾選想保留複習的詞彙，之後可到「待複習」集中練習。</p></details><p class='storage-note'>不限時練習，提供字元數提示；判分忽略大小寫與頭尾空白。實際小考時間與評分依老師規定。</p></div>`;
  $('quiz-group').addEventListener('change',()=>{const selected=Number($('quiz-group').value);if(Number.isInteger(selected)&&groups[selected]){quizGroup=selected;renderQuiz();$('quiz-group').focus();}});
 }
-function startQuiz(groupIndex=quizGroup){
+function startQuiz(groupIndex=quizGroup,countOverride=null){
  const group=quizGroups()[groupIndex];if(!Number.isInteger(groupIndex)||!group)throw new Error('找不到這個小考範圍。');quizGroup=groupIndex;
- beginSession({gate:1,continuous:false,review:false,limit:group.words.length,questions:shuffle(group.words),quiz:{groupIndex,label:group.label,pool:group.words,review:false}});
+ const count=Number(countOverride??$('quiz-question-count')?.value??(quizQuestionCount||group.words.length));
+ if(!Number.isInteger(count)||count<1||count>group.words.length)throw new Error(`請輸入 1–${group.words.length} 題。`);
+ quizQuestionCount=count;const questions=shuffle(group.words).slice(0,count);
+ beginSession({gate:1,continuous:false,review:false,limit:count,questions,quiz:{groupIndex,label:group.label,pool:questions,review:false}});
 }
 function retryQuiz(onlyWrong=false){
  if(!session?.quiz||!session.finished)return;const quiz={...session.quiz,review:onlyWrong},pool=onlyWrong?session.answers.filter(a=>!a.correct).map(a=>a.word):quiz.pool;
@@ -210,6 +214,13 @@ function playQuestion(){if(!session)return;stopAudio();if($('audio-message'))$('
 function playOption(i){if(!session||!session.options[i])return;stopAudio();if($('audio-message'))$('audio-message').textContent='';speak(session.options[i].english);}
 function playAll(){if(!session||session.options.length!==4)return;stopAudio();const generation=audioGeneration;let i=0;function play(){if(generation!==audioGeneration||!session||i>=4){document.querySelectorAll('.audio-option').forEach(e=>e.classList.remove('playing'));return;}document.querySelectorAll('.audio-option').forEach(e=>e.classList.remove('playing'));$('audio-option-'+i)?.classList.add('playing');speak(session.options[i].english,()=>{i++;play();});}play();}
 document.addEventListener('input',e=>{
+ if(e.target.id==='quiz-question-count'){
+  const group=quizGroups()[quizGroup],count=Number(e.target.value),valid=Number.isInteger(count)&&count>=1&&count<=group.words.length;
+  const button=document.querySelector("[data-action='start-quiz']");
+  if(valid)quizQuestionCount=count;
+  if(button){button.disabled=!valid;button.textContent=valid?`開始練習（${count} 題）`:`請輸入 1–${group.words.length} 題`;}
+  return;
+ }
  if(e.target.id!=='exam-question-count')return;
  const count=Number(e.target.value),valid=Number.isInteger(count)&&count>=1&&count<=IN_CLASS_EXAM.length;
  if(valid)examQuestionCount=count;
@@ -220,7 +231,7 @@ document.addEventListener('change',e=>{const checkbox=e.target.closest('input.re
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;try{
  if(b.dataset.view){setView(b.dataset.view);return;}if(b.dataset.gate){start(Number(b.dataset.gate));return;}if(b.dataset.review){start(Number(b.dataset.review),false,true);return;}
  if(b.dataset.answer!==undefined){answer(Number(b.dataset.answer));return;}if(b.dataset.play!==undefined){playOption(Number(b.dataset.play));return;}if(b.dataset.reviewRemove!==undefined){removeReviewItem(b.dataset.reviewRemove);return;}
- const actions={import:importBank,continuous:()=>start(1,true),'start-quiz':()=>startQuiz(),'start-first-150':()=>{const i=quizGroups().findIndex(g=>g.isExamRange);if(i<0)throw new Error('目前題庫沒有完整的單字 1–150。');startQuiz(i);},'start-exam':()=>startExam(),'start-review-queue':startReviewQueue,'toggle-current-review':toggleCurrentReview,'retry-exam':()=>startExam(false),'retry-exam-wrong':()=>startExam(true),'retry-quiz':()=>retryQuiz(),'review-quiz':()=>retryQuiz(true),next,nextGate,'next-gate':nextGate,'play-question':playQuestion,'play-all':playAll};actions[b.dataset.action]?.();
+ const actions={import:importBank,continuous:()=>start(1,true),'start-quiz':()=>startQuiz(),'start-first-150':()=>{const i=quizGroups().findIndex(g=>g.isExamRange);if(i<0)throw new Error('目前題庫沒有完整的單字 1–150。');startQuiz(i,quizGroups()[i].words.length);},'start-exam':()=>startExam(),'start-review-queue':startReviewQueue,'toggle-current-review':toggleCurrentReview,'retry-exam':()=>startExam(false),'retry-exam-wrong':()=>startExam(true),'retry-quiz':()=>retryQuiz(),'review-quiz':()=>retryQuiz(true),next,nextGate,'next-gate':nextGate,'play-question':playQuestion,'play-all':playAll};actions[b.dataset.action]?.();
  }catch(error){announce(error.message);}});
 document.addEventListener('keydown',e=>{if(!session||session.finished||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='8'&&!session.exam){e.preventDefault();if(session.gate===5||session.gate===6)playAll();else playQuestion();}else if(/^[1-4]$/.test(e.key)&&(session.exam||session.gate!==1)&&!session.answered){e.preventDefault();answer(Number(e.key)-1);}else if(e.key==='Enter'&&session.answered&&!e.target.closest('button')){e.preventDefault();next();}});
 window.addEventListener('pagehide',stopAudio);
