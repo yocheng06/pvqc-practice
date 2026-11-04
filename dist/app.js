@@ -10,6 +10,7 @@ const GATES = [
 ];
 const KEY='pvqc-computing-v1';
 const COURSE=window.PVQC_COURSE;
+const IN_CLASS_EXAM=window.PVQC_IN_CLASS_EXAM||[];
 const $=id=>document.getElementById(id);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const normalized=s=>s.trim().normalize('NFC').toLowerCase();
@@ -55,20 +56,42 @@ function parseBank(text){
 function stopAudio(){audioGeneration++;if(audioSupported)speechSynthesis.cancel();}
 function updateChrome(){
  $('bank-total').textContent=bank.length;$('mistake-count').textContent=mistakes.length;$('mistake-count').hidden=mistakes.length===0;
- const titles={home:'六關練習',quiz:'小考練習',bank:'我的題庫',mistakes:'錯題複習',session:session?.quiz?'小考 · 看中拼英':session?`第 ${session.gate} 關 · ${GATES[session.gate-1].name}`:'六關練習'};
+ const titles={home:'六關練習',quiz:'小考練習',exam:'題中考題',bank:'我的題庫',mistakes:'錯題複習',session:session?.exam?'題中考題 · 練習':session?.quiz?'小考 · 看中拼英':session?`第 ${session.gate} 關 · ${GATES[session.gate-1].name}`:'六關練習'};
  $('page-title').textContent=titles[view];$('breadcrumb').textContent=titles[view];
- $('page-description').textContent=({home:'同一份詞彙，練習六種看字與聽音能力。',quiz:'可練考前序號 1–150，或每 50 個單字分組練習。',bank:'保留課程的原始英文與中文詞義。',mistakes:'回到答錯的題型，再練一次。',session:session?.quiz?`${session.quiz.label} · ${session.quiz.review?'本次錯字複習':'逐題作答，立即核對拼字。'}`:'依照題目指示作答；聽音選項不顯示英文。'})[view];
- document.querySelectorAll('nav .nav-item').forEach(b=>{const selected=b.dataset.view===view||(view==='session'&&b.dataset.view===(session?.quiz?'quiz':'home'));b.classList.toggle('active',selected);if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+ $('page-description').textContent=({home:'同一份詞彙，練習六種看字與聽音能力。',quiz:'可練考前序號 1–150，或每 50 個單字分組練習。',exam:'刷 50 題課堂選擇題，逐題核對答案並複習錯題。',bank:'保留課程的原始英文與中文詞義。',mistakes:'回到答錯的題型，再練一次。',session:session?.exam?`題中考題 · 第 ${session.index+1} / ${session.questions.length} 題`:session?.quiz?`${session.quiz.label} · ${session.quiz.review?'本次錯字複習':'逐題作答，立即核對拼字。'}`:'依照題目指示作答；聽音選項不顯示英文。'})[view];
+ document.querySelectorAll('nav .nav-item').forEach(b=>{const selected=b.dataset.view===view||(view==='session'&&b.dataset.view===(session?.exam?'exam':session?.quiz?'quiz':'home'));b.classList.toggle('active',selected);if(selected)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
 }
-function setView(next){if(!['home','quiz','bank','mistakes'].includes(next))return;stopAudio();clearInterval(timer);session=null;view=next;updateChrome();render();}
+function setView(next){if(!['home','quiz','exam','bank','mistakes'].includes(next))return;stopAudio();clearInterval(timer);session=null;view=next;updateChrome();render();}
 function canChoose(){return new Set(bank.map(w=>w.chinese)).size>=4&&bank.length>=4;}
-function render(){if(view==='home')renderHome();else if(view==='quiz')renderQuiz();else if(view==='bank')renderBank();else if(view==='mistakes')renderMistakes();else renderQuestion();}
+function render(){if(view==='home')renderHome();else if(view==='quiz')renderQuiz();else if(view==='exam')renderExamSetup();else if(view==='bank')renderBank();else if(view==='mistakes')renderMistakes();else renderQuestion();}
 function quizGroups(){
  const numbered=bank.every(w=>Number.isInteger(Number(w.id))&&Number(w.id)>0)&&new Set(bank.map(w=>Number(w.id))).size===bank.length;
  const ordered=numbered?[...bank].sort((a,b)=>Number(a.id)-Number(b.id)):[...bank],groups=[];
  if(numbered){const words=ordered.filter(w=>Number(w.id)>=1&&Number(w.id)<=150);if(words.length===150&&words.every((w,i)=>Number(w.id)===i+1))groups.push({words,label:'序號 1–150',isExamRange:true});}
  for(let i=0;i<ordered.length;i+=50){const words=ordered.slice(i,i+50);groups.push({words,label:numbered?`序號 ${words[0].id}–${words.at(-1).id}`:`第 ${i+1}–${i+words.length} 筆`,groupNumber:Math.floor(i/50)+1});}
  return groups;
+}
+function renderExamSetup(){
+ if(!IN_CLASS_EXAM.length){$('activity').innerHTML='<div class="empty"><h2>題目資料尚未載入</h2><p>重新整理頁面後再試一次。</p></div>';return;}
+ const differences=IN_CLASS_EXAM.filter(q=>q.answer!==q.sourceMarkedAnswer).map(q=>q.number);
+ $('activity').innerHTML=`<div class='bank-banner loaded'><div><strong>題中考題 · ${IN_CLASS_EXAM.length} 題</strong><p>四選一練習，題目順序隨機；每題作答後立即核對答案。</p></div><span class='quiz-count'><strong>${IN_CLASS_EXAM.length}</strong> 題</span></div><div class='bank-editor exam-setup'><h2>開始刷題</h2><p>完成後會顯示答對率和錯題清單，也能只重練答錯的題目。</p>${differences.length?`<p class='storage-note'>題目原稿括號標記與你提供的答案表不同：第 ${differences.join('、')} 題。練習判分依你提供的答案表。</p>`:''}<button class='primary' data-action='start-exam'>開始練習 ${IN_CLASS_EXAM.length} 題</button></div>`;
+}
+function startExam(onlyWrong=false){
+ const wrongQuestions=onlyWrong&&session?.exam&&session.finished?session.answers.filter(a=>!a.correct).map(a=>a.question):[];
+ const questions=onlyWrong?wrongQuestions:IN_CLASS_EXAM;if(!questions.length)throw new Error('目前沒有錯題可以重練。');
+ beginSession({gate:1,exam:true,review:onlyWrong,continuous:false,limit:questions.length,questions:shuffle(questions)});
+}
+function renderExamQuestion(){
+ const s=session,q=s.questions[s.index],labels='ABCD';s.answered=false;
+ $('activity').innerHTML=`<div class='session-toolbar'><button class='quiet-button' data-view='exam'>返回題中考題</button><span>練習計時 <span id='elapsed'>${duration(Date.now()-s.started)}</span></span></div><div class='question-meta'><span class='unit-tag'>題中考題${s.review?' · 錯題重練':''}</span><span>第 ${s.index+1} / ${s.questions.length} 題 · 原題第 ${q.number} 題</span></div><div class='progress-track'><div style='width:${s.index/s.questions.length*100}%'></div></div><div class='question-card exam-card'><span class='question-instruction'>選出正確答案</span><p class='exam-stem'>${escape(q.stem)}</p></div><div class='options exam-options'>${q.options.map((option,i)=>`<button class='option exam-option' data-answer='${i}'><span class='option-letter'>${labels[i]}</span><span>${escape(option)}</span></button>`).join('')}</div><div id='feedback' aria-live='polite'></div><div id='next-area'></div>`;
+}
+function answerExam(value){
+ if(!session||!session.exam||session.answered||session.finished)return false;
+ if(!Number.isInteger(value)||value<0||value>3)throw new Error('請選擇 A、B、C 或 D。');
+ const s=session,q=s.questions[s.index],labels='ABCD',correctIndex=labels.indexOf(q.answer),correct=value===correctIndex;s.answered=true;s.answers.push({question:q,correct,answer:value});
+ document.querySelectorAll('.exam-option').forEach(button=>{button.disabled=true;const i=Number(button.dataset.answer);if(i===correctIndex)button.classList.add('correct');else if(i===value)button.classList.add('wrong');});
+ $('feedback').innerHTML=`<div class='feedback ${correct?'':'wrong'}'><strong>${correct?'答對了':'答錯了'} · 正確答案 ${labels[correctIndex]}</strong><p>${escape(q.options[correctIndex])}</p>${correct?'':`<p>你的答案：${labels[value]} · ${escape(q.options[value])}</p>`}</div>`;
+ $('next-area').innerHTML=`<div class='next-row'><span>本次已答對 ${s.answers.filter(a=>a.correct).length} 題</span><button class='primary' data-action='next'>${s.index+1===s.questions.length?'查看結果':'下一題'}</button></div>`;return correct;
 }
 function renderQuiz(){
  const groups=quizGroups();if(!groups.length){$('activity').innerHTML='<div class="empty"><h2>先加入課程題庫</h2><p>加入詞彙後，會依序分成每組 50 個的小考範圍。</p><button class="primary" data-view="bank">加入題庫</button></div>';return;}
@@ -131,7 +154,7 @@ function start(gate,continuous=false,review=false){
 function duration(ms){const s=Math.floor(ms/1000);return`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;}
 function optionsFor(word,gate){const value=w=>gate===2||gate===3?w.chinese:normalized(w.english),seen=new Set([value(word)]),pool=[];for(const w of shuffle(bank)){if(gate===5&&w.chinese===word.chinese)continue;if(!seen.has(value(w))){seen.add(value(w));pool.push(w);}}return shuffle([word,...pool.slice(0,3)]);}
 function renderQuestion(){
- if(!session)return;stopAudio();const s=session,g=GATES[s.gate-1],w=s.questions[s.index];s.answered=false;s.options=g.id===1?[]:optionsFor(w,g.id);
+ if(!session)return;if(session.exam){renderExamQuestion();return;}stopAudio();const s=session,g=GATES[s.gate-1],w=s.questions[s.index];s.answered=false;s.options=g.id===1?[]:optionsFor(w,g.id);
  const sound=g.sound==='question';const term=sound?'<div class="audio-question"><span aria-hidden="true">◖ ♪ ◗</span><button class="primary" data-action="play-question">播放題目</button></div>':`<div class="term">${escape(g.id===1||g.id===5?w.chinese:w.english)}</div>`;
  $('activity').innerHTML=`<div class="session-toolbar"><button class="quiet-button" data-view="${s.quiz?'quiz':'home'}">${s.quiz?'返回小考區':'返回六關'}</button><span>練習計時 <span id="elapsed">${duration(Date.now()-s.started)}</span></span></div><div class="question-meta"><span class="unit-tag">${s.quiz?escape(s.quiz.label)+(s.quiz.review?' · 錯字複習':''): '第 '+g.id+' 關 · '+g.name}</span><span>第 ${s.index+1} / ${s.questions.length} 題</span></div><div class="progress-track"><div style="width:${s.index/s.questions.length*100}%"></div></div><div class="question-card"><span class="question-instruction">${g.prompt}</span>${term}<p class="question-hint">${g.id===1?`共 ${w.english.length} 個字元（含空格）；練習判分忽略大小寫。`:g.sound==='options'?'先聽各選項，再選取答案。':sound?'可重播題目；答案公布前不顯示原英文。':'選取後會顯示正確答案。'}</p></div>
  ${g.id===1?`<form id="spelling-form"><label class="input-label" for="spelling">英文答案</label><div class="spelling-row"><input id="spelling" class="text-input" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" placeholder="輸入英文詞彙" required><button class="primary" type="submit">確認答案</button></div></form>`:`<div class="options">${s.options.map((option,i)=>g.sound==='options'?`<div class="audio-option" id="audio-option-${i}"><button class="speak" data-play="${i}" aria-label="播放選項 ${i+1}">♫ 播放 ${i+1}</button><button class="option audio-answer" data-answer="${i}" aria-label="選擇選項 ${i+1}"><span class="option-letter">${i+1}</span>選擇此發音</button></div>`:`<button class="option" data-answer="${i}"><span class="option-letter">${i+1}</span>${escape(g.id===2||g.id===3?option.chinese:option.english)}</button>`).join('')}</div>`}
@@ -140,7 +163,7 @@ function renderQuestion(){
  if(sound)playQuestion();else if(g.sound==='options')playAll();
 }
 function answer(value){
- if(!session||session.answered||session.finished)return false;const s=session,w=s.questions[s.index],g=GATES[s.gate-1];
+ if(!session||session.answered||session.finished)return false;if(session.exam)return answerExam(value);const s=session,w=s.questions[s.index],g=GATES[s.gate-1];
  if(g.id!==1&&(!Number.isInteger(value)||value<0||value>=s.options.length))throw new Error('選項必須是 1 到 4。');
  if(g.id===1&&(typeof value!=='string'||!value.trim()))throw new Error('請輸入英文答案。');
  stopAudio();const accepted=g.id===1?(s.quiz?s.quiz.pool:bank).filter(o=>o.chinese===w.chinese&&o.english.length===w.english.length):[w];const correct=g.id===1?accepted.some(o=>normalized(value)===normalized(o.english)):wordKey(s.options[value])===wordKey(w);s.answered=true;s.answers.push({word:w,correct,answer:value});
@@ -150,9 +173,9 @@ function answer(value){
  $('feedback').innerHTML=`<div class="feedback ${correct?'':'wrong'}"><strong>${correct?'答對了':'再記一次'} · ${escape(w.english)} = ${escape(w.chinese)}</strong><p>${g.sound==='options'?`正確發音是選項 ${s.options.findIndex(o=>wordKey(o)===wordKey(w))+1}。選項詞彙：${s.options.map((o,i)=>`${i+1}. ${escape(o.english)}`).join(' / ')}`:`詞義與拼字依照你的課程題庫。${w.pos?' 詞性：'+escape(w.pos):''}${w.id?' · 原序號 '+w.id:''}`}</p><button class="speak" data-action="play-question" ${!audioSupported?'disabled':''}>♫ 聽正確發音</button></div>`;
  $('next-area').innerHTML=`<div class="next-row"><span>${s.quiz?'本次':'本關'}已答對 ${s.answers.filter(a=>a.correct).length} 題</span><button class="primary" data-action="next">${s.index+1===s.questions.length?(s.quiz?'查看小考結果':'查看本關結果'):'下一題'}</button></div>`;return correct;
 }
-function next(){if(!session||!session.answered||session.finished)return;stopAudio();if(session.index+1<session.questions.length){session.index++;renderQuestion();}else finish();}
+function next(){if(!session||!session.answered||session.finished)return;if(session.exam){if(session.index+1<session.questions.length){session.index++;renderExamQuestion();}else finish();return;}stopAudio();if(session.index+1<session.questions.length){session.index++;renderQuestion();}else finish();}
 function finish(){
- clearInterval(timer);session.finished=true;const s=session,correct=s.answers.filter(a=>a.correct).length,total=s.questions.length,percent=Math.round(correct/total*100),summary={gate:s.gate,correct,total,percent};s.summaries.push(summary);
+ clearInterval(timer);session.finished=true;const s=session,correct=s.answers.filter(a=>a.correct).length,total=s.questions.length,percent=Math.round(correct/total*100),summary={gate:s.gate,correct,total,percent};if(s.exam){const wrong=s.answers.filter(a=>!a.correct);$('activity').innerHTML=`<div class='result exam-result'><p class='eyebrow'>題中考題 · ${total} 題</p><h2>${s.review?'錯題重練完成':'練習完成'}</h2><div class='result-score'>${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 答錯 ${wrong.length} 題<br>練習用時 ${duration(Date.now()-s.started)}</p><div class='card-actions'><button class='primary' data-action='retry-exam'>再練全部 ${IN_CLASS_EXAM.length} 題</button>${wrong.length?`<button class='secondary' data-action='retry-exam-wrong'>只練錯題 ${wrong.length} 題</button>`:''}<button class='secondary' data-view='exam'>返回題中考題</button></div>${wrong.length?`<div class='quiz-errors exam-errors'><h3>本次錯題</h3><ul>${wrong.map(a=>{const i='ABCD'.indexOf(a.question.answer);return `<li><p>原題第 ${a.question.number} 題</p><div class='exam-error-stem'>${escape(a.question.stem)}</div><p class='quiz-your-answer'>你的答案：${'ABCD'[a.answer]} · ${escape(a.question.options[a.answer])}</p><p class='quiz-your-answer'>正確答案：${a.question.answer} · ${escape(a.question.options[i])}</p></li>`;}).join('')}</ul></div>`:'<p>本次全部答對，可以再打亂順序練一次。</p>'}</div>`;return;}s.summaries.push(summary);
  if(s.quiz){const wrong=s.answers.filter(a=>!a.correct);$('activity').innerHTML=`<div class="result quiz-result"><p class="eyebrow">${escape(s.quiz.label)} · 看中拼英</p><h2>${s.quiz.review?'錯字複習完成':'小考練習完成'}</h2><div class="result-score">${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 答錯 ${wrong.length} 題<br>練習用時 ${duration(Date.now()-s.started)}</p><div class="card-actions"><button class="primary" data-action="retry-quiz">重練本組 ${s.quiz.pool.length} 題</button>${wrong.length?`<button class="secondary" data-action="review-quiz">只練本次 ${wrong.length} 個錯字</button>`:''}<button class="secondary" data-view="quiz">選擇其他組</button></div>${wrong.length?`<div class="quiz-errors"><h3>本次錯字清單</h3><ul>${wrong.map(a=>`<li><p>${escape(a.word.chinese)} <span class="storage-note">· 原序號 ${escape(a.word.id||'未提供')}</span></p><strong>${escape(a.word.english)}</strong><p class="quiz-your-answer">你的答案：${escape(a.answer)}</p></li>`).join('')}</ul></div>`:'<p>本次全部答對，可以前往下一組，或再打亂順序練一次。</p>'}<p class="storage-note">這是練習答對率；實際小考評分依老師規定。</p></div>`;return;}
  $('activity').innerHTML=`<div class="result"><p class="eyebrow">第 ${s.gate} 關 · ${GATES[s.gate-1].name}</p><h2>本關練習完成</h2><div class="result-score">${percent}<span> %</span></div><p>答對 ${correct} / ${total} 題 · 本關用時 ${duration(Date.now()-s.started)}<br>這是練習答對率，並非官方檢定成績。</p>${s.continuous?`<div class="results-list">${s.summaries.map(r=>`<div><span>第 ${r.gate} 關 ${GATES[r.gate-1].name}</span><strong>${r.correct} / ${r.total}</strong></div>`).join('')}</div>`:''}<div class="card-actions">${s.continuous&&s.gate<6?'<button class="primary" data-action="next-gate">前往下一關</button>':'<button class="primary" data-view="home">返回六關練習</button>'}<button class="secondary" data-view="mistakes">查看錯題</button></div></div>`;
 }
@@ -169,9 +192,9 @@ function playAll(){if(!session||session.options.length!==4)return;stopAudio();co
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;try{
  if(b.dataset.view){setView(b.dataset.view);return;}if(b.dataset.gate){start(Number(b.dataset.gate));return;}if(b.dataset.review){start(Number(b.dataset.review),false,true);return;}
  if(b.dataset.answer!==undefined){answer(Number(b.dataset.answer));return;}if(b.dataset.play!==undefined){playOption(Number(b.dataset.play));return;}
- const actions={import:importBank,continuous:()=>start(1,true),'start-quiz':()=>startQuiz(),'start-first-150':()=>{const i=quizGroups().findIndex(g=>g.isExamRange);if(i<0)throw new Error('目前題庫沒有完整的單字 1–150。');startQuiz(i);},'retry-quiz':()=>retryQuiz(),'review-quiz':()=>retryQuiz(true),next,nextGate,'next-gate':nextGate,'play-question':playQuestion,'play-all':playAll};actions[b.dataset.action]?.();
+ const actions={import:importBank,continuous:()=>start(1,true),'start-quiz':()=>startQuiz(),'start-first-150':()=>{const i=quizGroups().findIndex(g=>g.isExamRange);if(i<0)throw new Error('目前題庫沒有完整的單字 1–150。');startQuiz(i);},'start-exam':()=>startExam(),'retry-exam':()=>startExam(false),'retry-exam-wrong':()=>startExam(true),'retry-quiz':()=>retryQuiz(),'review-quiz':()=>retryQuiz(true),next,nextGate,'next-gate':nextGate,'play-question':playQuestion,'play-all':playAll};actions[b.dataset.action]?.();
  }catch(error){announce(error.message);}});
-document.addEventListener('keydown',e=>{if(!session||session.finished||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='8'){e.preventDefault();if(session.gate===5||session.gate===6)playAll();else playQuestion();}else if(/^[1-4]$/.test(e.key)&&session.gate!==1&&!session.answered){e.preventDefault();answer(Number(e.key)-1);}else if(e.key==='Enter'&&session.answered&&!e.target.closest('button')){e.preventDefault();next();}});
+document.addEventListener('keydown',e=>{if(!session||session.finished||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.ctrlKey||e.altKey||e.metaKey)return;if(e.key==='8'&&!session.exam){e.preventDefault();if(session.gate===5||session.gate===6)playAll();else playQuestion();}else if(/^[1-4]$/.test(e.key)&&(session.exam||session.gate!==1)&&!session.answered){e.preventDefault();answer(Number(e.key)-1);}else if(e.key==='Enter'&&session.answered&&!e.target.closest('button')){e.preventDefault();next();}});
 window.addEventListener('pagehide',stopAudio);
 const context=document.modelContext;if(context?.registerTool){const lifecycle=new AbortController();const tools=[
  {name:'read_practice_state',title:'讀取 PVQC 練習狀態',description:'Read the current vocabulary count, mistakes and visible practice state. Does not reveal unanswered listening questions.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:true},execute:()=>({view,words:bank.length,mistakes:mistakes.length,gate:session?.gate??null,question:session?session.index+1:null,answered:session?.answered??false,total:session?.questions.length??null,quiz:session?.quiz?{group:session.quiz.groupIndex+1,label:session.quiz.label,review:session.quiz.review}:null})},
